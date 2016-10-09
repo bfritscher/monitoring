@@ -1,0 +1,65 @@
+version: '2'
+
+volumes:
+  influxdb_data:
+    driver: local
+  grafana_data:
+    driver: local
+  kapacitor_data:
+    driver: local
+
+services:
+  influxdb:
+    image: influxdb
+    restart: always
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+    ports:
+      - "127.0.0.1:8083:8083"
+      - "127.0.0.1:8086:8086"
+    expose:
+      - "8083"
+      - "8086"
+
+  cadvisor:
+    image: google/cadvisor
+    command: -storage_driver=influxdb -storage_driver_db=cadvisor -storage_driver_host=influxdb:8086
+    restart: always
+    expose:
+      - "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - influxdb
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
+  grafana:
+    image: grafana/grafana
+    restart: always
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - influxdb
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ADMIN_PASSWORD=foobar
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_NAME=Public
+
+  kapacitor:
+    image: kapacitor
+    environment:
+      KAPACITOR_HOSTNAME: kapacitor
+      KAPACITOR_INFLUXDB_0_URLS_0: http://influxdb:8086
+    volumes:
+      - kapacitor_data:/var/lib/kapacitor
+    depends_on:
+      - influxdb
+    ports:
+      - "127.0.0.1:9092:9092"
